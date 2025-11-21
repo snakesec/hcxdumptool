@@ -140,6 +140,8 @@ static int apcountmax = APCOUNT_MAX;
 static int clientcountmax = CLIENTCOUNT_MAX;
 
 static u64 packetcount = 1;
+static u64 beaconrcascancount = 0; 
+static u64 proberesponsercascancount = 0;
 static size_t proberesponsetxindex = 0;
 static u32 proberesponsetxmax = PROBERESPONSETX_MAX;
 
@@ -1184,6 +1186,7 @@ return;
   static inline __attribute__((always_inline)) void process80211eapol_m3(void)
 {
 size_t i;
+static time_t tvlast;
 
 for(i = 0; i < APLIST_MAX - 1; i++)
 	{
@@ -1202,6 +1205,19 @@ for(i = 0; i < APLIST_MAX - 1; i++)
 	if(((aplist + i)->apdata->tsm2 - (aplist + i)->apdata->tsm1) > TSEAPOL1) break;
 	wanteventflag |= exiteapolm3flag;
 	(aplist + i)->apdata->m1m2m3 = '+';
+	if(rds == 4)
+		{
+		if((aplist + i)->apdata->m1m2m3 != '+')
+			{
+			tvlast = (aplist +i)->tsakt / 1000000000ULL;
+			strftime(timestring, TIMESTRING_LEN, "%H:%M:%S", localtime(&tvlast));
+			fprintf(stdout, "%s M123     %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %.*s\n", timestring,
+					(aplist + i)->apdata->maca[0], (aplist + i)->apdata->maca[1], (aplist + i)->apdata->maca[2], (aplist + i)->apdata->maca[3], (aplist + i)->apdata->maca[4], (aplist + i)->apdata->maca[5],
+					(aplist + i)->apdata->maca[0], (aplist + i)->apdata->macc[1], (aplist + i)->apdata->macc[2], (aplist + i)->apdata->macc[3], (aplist + i)->apdata->macc[4], (aplist + i)->apdata->macc[5],
+					(aplist + i)->apdata->essidlen, (aplist + i)->apdata->essid);
+			}
+		}
+	(aplist + i)->apdata->m1m2m3 = '+';
 	writeepb();
 	return;
 	}
@@ -1212,6 +1228,7 @@ return;
 static inline __attribute__((always_inline)) void process80211eapol_m2(void)
 {
 static size_t i;
+static time_t tvlast;
 static u64 replaycount;
 
 replaycount = __hcx64be(wpakey->replaycount);
@@ -1227,6 +1244,18 @@ if(replaycountrg == replaycount)
 			if(memcmp((calist + i)->cadata->mic, wpakey->keymic, KEYMIC_MAX) == 0) return;
 			memcpy((calist + i)->cadata->mic, wpakey->keymic, KEYMIC_MAX);
 			(calist + i)->cadata->clientcount -= 1;
+			if(rds == 4)
+				{
+				if((calist + i)->cadata->m2 != '+')
+					{
+					tvlast = (calist +i)->tsakt / 1000000000ULL;
+					strftime(timestring, TIMESTRING_LEN, "%H:%M:%S", localtime(&tvlast));
+					fprintf(stdout, "%s M12ROGUE %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %.*s\n", timestring,
+							(calist + i)->cadata->maca[0], (calist + i)->cadata->maca[1], (calist + i)->cadata->maca[2], (calist + i)->cadata->maca[3], (calist + i)->cadata->maca[4], (calist + i)->cadata->maca[5],
+							(calist + i)->cadata->maca[0], (calist + i)->cadata->macc[1], (calist + i)->cadata->macc[2], (calist + i)->cadata->macc[3], (calist + i)->cadata->macc[4], (calist + i)->cadata->macc[5],
+							(calist + i)->cadata->essidlen, (calist + i)->cadata->essid);
+					}
+				}
 			(calist + i)->cadata->m2 = '+';
 			(calist + i)->cadata->channel = (scanlist + scanlistindex)->channel;
 			wanteventflag |= exiteapolm2rgflag;
@@ -1250,6 +1279,18 @@ for(i = 0; i < APLIST_MAX - 1; i++)
 	(aplist + i)->apdata->replaycount2 = __hcx64be(wpakey->replaycount);
 	if(((aplist + i)->apdata->replaycount1) != (aplist + i)->apdata->replaycount2) break;
 	if(((aplist + i)->apdata->tsm2 - (aplist + i)->apdata->tsm1) > TSEAPOL1) break;
+	if(rds == 4)
+		{
+		if((aplist + i)->apdata->m1m2 != '+')
+			{
+			tvlast = (aplist +i)->tsakt / 1000000000ULL;
+			strftime(timestring, TIMESTRING_LEN, "%H:%M:%S", localtime(&tvlast));
+			fprintf(stdout, "%s M12      %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %.*s\n", timestring,
+					(aplist + i)->apdata->maca[0], (aplist + i)->apdata->maca[1], (aplist + i)->apdata->maca[2], (aplist + i)->apdata->maca[3], (aplist + i)->apdata->maca[4], (aplist + i)->apdata->maca[5],
+					(aplist + i)->apdata->maca[0], (aplist + i)->apdata->macc[1], (aplist + i)->apdata->macc[2], (aplist + i)->apdata->macc[3], (aplist + i)->apdata->macc[4], (aplist + i)->apdata->macc[5],
+					(aplist + i)->apdata->essidlen, (aplist + i)->apdata->essid);
+			}
+		}
 	(aplist + i)->apdata->m1m2 = '+';
 	wanteventflag |= exiteapolm2flag;
 	writeepb();
@@ -1262,6 +1303,7 @@ return;
 static inline __attribute__((always_inline)) void process80211eapol_m1(void)
 {
 static size_t i;
+static time_t tvlast;
 static ieee80211_pmkid_t *pmkid;
 
 if(memcmp(macbc, macfrx->addr1, ETH_ALEN) == 0)
@@ -1293,7 +1335,22 @@ for(i = 0; i < APLIST_MAX - 1; i++)
 					{
 					if(memcmp(zeroed, pmkid->pmkid, PMKID_MAX) != 0)
 						{
-						if((aplist + i)->apdata->essidlen != 0) (aplist + i)->apdata->pmkid = '+';
+						if((aplist + i)->apdata->essidlen != 0)
+							{
+							if(rds == 4)
+								{
+								if((aplist + i)->apdata->pmkid != '+')
+									{
+									tvlast = (aplist +i)->tsakt / 1000000000ULL;
+									strftime(timestring, TIMESTRING_LEN, "%H:%M:%S", localtime(&tvlast));
+									fprintf(stdout, "%s PMKID    %02x%02x%02x%02x%02x%02x %02x%02x%02x%02x%02x%02x %.*s\n", timestring,
+											(aplist + i)->apdata->maca[0], (aplist + i)->apdata->maca[1], (aplist + i)->apdata->maca[2], (aplist + i)->apdata->maca[3], (aplist + i)->apdata->maca[4], (aplist + i)->apdata->maca[5],
+											(aplist + i)->apdata->maca[0], (aplist + i)->apdata->macc[1], (aplist + i)->apdata->macc[2], (aplist + i)->apdata->macc[3], (aplist + i)->apdata->macc[4], (aplist + i)->apdata->macc[5],
+											(aplist + i)->apdata->essidlen, (aplist + i)->apdata->essid);
+									}
+								}
+							(aplist + i)->apdata->pmkid = '+';
+							}
 						memcpy((aplist + i)->apdata->rsnpmkid, pmkid->pmkid, PMKID_MAX);
 						wanteventflag |= exiteapolpmkidflag;
 						}
@@ -1439,45 +1496,6 @@ errortxcount++;
 return;
 }
 /*---------------------------------------------------------------------------*/
-static inline __attribute__((always_inline)) void send_80211_associationrequest2rg(apdata_t *apdata)
-{
-ssize_t ii;
-
-ii = RTHTX_SIZE;
-macftx = (ieee80211_mac_t*)&wltxbuffer[ii];
-macftx->type = IEEE80211_FTYPE_MGMT;
-macftx->subtype = IEEE80211_STYPE_ASSOC_REQ;
-wltxbuffer[ii + 1] = 0;
-macftx->duration = HCXTXDURATION;
-memcpy(macftx->addr1, apdata->maca, ETH_ALEN);
-memcpy(macftx->addr2, macclientrg, ETH_ALEN);
-memcpy(macftx->addr3, apdata->maca, ETH_ALEN);
-macftx->sequence = __hcx16le(seqcounter2++ << 4);
-if(seqcounter1 > 4095) seqcounter2 = 1;
-ii += MAC_SIZE_NORM;
-memcpy(&wltxbuffer[ii], &associationrequestcapa, ASSOCIATIONREQUESTCAPA_SIZE);
-ii += ASSOCIATIONREQUESTCAPA_SIZE;
-wltxbuffer[ii ++] = 0;
-wltxbuffer[ii ++] = apdata->essidlen;
-memcpy(&wltxbuffer[ii], apdata->essid, apdata->essidlen);
-ii += apdata->essidlen;
-memcpy(&wltxbuffer[ii], &associationrequestdata, ASSOCIATIONREQUEST_SIZE);
-wltxbuffer[ii +OFFSETGCS] = apdata->gcs;
-wltxbuffer[ii +OFFSETPCS] = apdata->pcs;
-wltxbuffer[ii +OFFSETAKM] = apdata->akm;
-ii += ASSOCIATIONREQUEST_SIZE;
-if((write(fd_socket_tx, &wltxbuffer, ii)) == ii)
-	{
-	errortxcount = 0;
-	return;
-	}
-#ifdef HCXDEBUG
-fprintf(fh_debug, "write associationrequest failed: %s\n", strerror(errno));
-#endif
-errortxcount++;
-return;
-}
-/*---------------------------------------------------------------------------*/
 static inline __attribute__((always_inline)) void send_80211_associationrequest2(apdata_t *apdata)
 {
 ssize_t ii;
@@ -1537,57 +1555,6 @@ if((write(fd_socket_tx, &wltxbuffer, RTHTX_SIZE + MAC_SIZE_NORM + AUTHENTICATION
 	}
 #ifdef HCXDEBUG
 fprintf(fh_debug, "write_80211_authenticationrequest failed: %s\n", strerror(errno));
-#endif
-errortxcount++;
-return;
-}
-/*---------------------------------------------------------------------------*/
-static inline __attribute__((always_inline)) void send_80211_authenticationrequestrg(void)
-{
-macftx = (ieee80211_mac_t*)&wltxbuffer[RTHTX_SIZE];
-macftx->type = IEEE80211_FTYPE_MGMT;
-macftx->subtype = IEEE80211_STYPE_AUTH;
-wltxbuffer[RTHTX_SIZE + 1] = 0;
-macftx->duration = HCXTXDURATION;
-memcpy(macftx->addr1, macfrx->addr2, ETH_ALEN);
-memcpy(macftx->addr2, macclientrg, ETH_ALEN);
-memcpy(macftx->addr3, macfrx->addr3, ETH_ALEN);
-macftx->sequence = __hcx16le(seqcounter2++ << 4);
-if(seqcounter1 > 4095) seqcounter2 = 1;
-memcpy(&wltxbuffer[RTHTX_SIZE + MAC_SIZE_NORM], &authenticationrequestdata, AUTHENTICATIONREQUEST_SIZE);
-if((write(fd_socket_tx, &wltxbuffer, RTHTX_SIZE + MAC_SIZE_NORM + AUTHENTICATIONREQUEST_SIZE)) == RTHTX_SIZE + MAC_SIZE_NORM + AUTHENTICATIONREQUEST_SIZE)
-	{
-	errortxcount = 0;
-	return;
-	}
-#ifdef HCXDEBUG
-fprintf(fh_debug, "write_80211_authenticationrequest failed: %s\n", strerror(errno));
-#endif
-errortxcount++;
-return;
-}
-/*---------------------------------------------------------------------------*/
-static inline __attribute__((always_inline)) void send_80211_disassociationaca(u8 *fmcl, u8 *toap)
-{
-macftx = (ieee80211_mac_t*)&wltxbuffer[RTHTX_SIZE];
-macftx->type = IEEE80211_FTYPE_MGMT;
-macftx->subtype = IEEE80211_STYPE_DISASSOC;
-wltxbuffer[RTHTX_SIZE +1] = 0;
-macftx->duration = HCXTXDURATION;
-memcpy(macftx->addr1, toap, ETH_ALEN);
-memcpy(macftx->addr2, fmcl, ETH_ALEN);
-memcpy(macftx->addr3, toap, ETH_ALEN);
-macftx->sequence = __hcx16le(seqcounter1++ << 4);
-if(seqcounter1 > BCD_MAX) seqcounter1 = 1;
-wltxbuffer[RTHTX_SIZE + MAC_SIZE_NORM] = WLAN_REASON_DISASSOC_STA_HAS_LEFT;
-wltxbuffer[RTHTX_SIZE + MAC_SIZE_NORM +1] = 0;
-if((write(fd_socket_tx, wltxbuffer, RTHTX_SIZE + MAC_SIZE_NORM +2)) == RTHTX_SIZE + MAC_SIZE_NORM +2)
-	{
-	errortxcount = 0;
-	return;
-	}
-#ifdef HCXDEBUG
-fprintf(fh_debug, "write_80211_disassociation121 failed: %s\n", strerror(errno));
 #endif
 errortxcount++;
 return;
@@ -2445,7 +2412,7 @@ if(memcmp(macfrx->addr3, macfrx->addr1, ETH_ALEN) == 0)
 return;
 }
 /*---------------------------------------------------------------------------*/
-static inline __attribute__((always_inline)) void send_80211_probereresponse_list()
+static inline __attribute__((always_inline)) void send_80211_probereresponse_list(void)
 {
 static ssize_t ii;
 static ieee80211_beacon_proberesponse_t *beacontx;
@@ -2760,6 +2727,7 @@ for(i = 0; i < APLIST_MAX - 1; i++)
 	if(__hcx16le(proberesponse->capability) & WLAN_CAPABILITY_PRIVACY) (aplist + i)->apdata->privacy = 'e';
 	else (aplist + i)->apdata->privacy = 'o';
 	get_tags((aplist + i)->apdata, proberesponselen, proberesponse->ie);
+	proberesponsercascancount++;
 	if(i > APLIST_HALF) qsort(aplist, i + 1, APLIST_SIZE, sort_aplist_by_tsakt);
 	return;
 	}
@@ -2772,6 +2740,7 @@ if(memcmp(macclientrg, macfrx->addr1, ETH_ALEN) != 0) (aplist + i)->apdata->tsre
 if(__hcx16le(proberesponse->capability) & WLAN_CAPABILITY_PRIVACY) (aplist + i)->apdata->privacy = 'e';
 else (aplist + i)->apdata->privacy = 'o';
 get_tags((aplist + i)->apdata, proberesponselen, proberesponse->ie);
+proberesponsercascancount++;
 qsort(aplist, i + 1, APLIST_SIZE, sort_aplist_by_tsakt);
 return;
 }
@@ -2859,6 +2828,7 @@ for(i = 0; i < APLIST_MAX - 1; i++)
 	if(__hcx16le(beacon->capability) & WLAN_CAPABILITY_PRIVACY) (aplist + i)->apdata->privacy = 'e';
 	else (aplist + i)->apdata->privacy = 'o';
 	get_tags((aplist + i)->apdata, beaconlen, beacon->ie);
+	beaconrcascancount++;
 	if(i > APLIST_HALF) qsort(aplist, i + 1, APLIST_SIZE, sort_aplist_by_tsakt);
 	return;
 	}
@@ -2870,6 +2840,7 @@ memcpy((aplist + i)->apdata->maca, macfrx->addr2, ETH_ALEN);
 if(__hcx16le(beacon->capability) & WLAN_CAPABILITY_PRIVACY) (aplist + i)->apdata->privacy = 'e';
 else (aplist + i)->apdata->privacy = 'o';
 get_tags((aplist + i)->apdata, beaconlen, beacon->ie);
+beaconrcascancount++;
 qsort(aplist, i + 1, APLIST_SIZE, sort_aplist_by_tsakt);
 return;
 }
@@ -3197,7 +3168,6 @@ static int epret = 0;
 static struct epoll_event ev, events[EPOLL_EVENTS_MAX];
 static size_t packetcountlast = 0;
 static u64 timer1count;
-static struct timespec sleepled;
 
 if((fd_epoll= epoll_create(1)) < 0) return false;
 ev.data.fd = fd_socket_rx;
@@ -3210,14 +3180,6 @@ ev.events = EPOLLIN;
 if(epoll_ctl(fd_epoll, EPOLL_CTL_ADD, fd_timer1, &ev) < 0) return false;
 epi++;
 
-sleepled.tv_sec = 0;
-sleepled.tv_nsec = GPIO_LED_DELAY;
-if(gpiostatusled > 0)
-	{
-	GPIO_SET = 1 << gpiostatusled;
-	nanosleep(&sleepled, NULL);
-	GPIO_CLR = 1 << gpiostatusled;
-	}
 if(nl_set_frequency() == false) errorcount++;
 while(!wanteventflag)
 	{
@@ -3248,12 +3210,7 @@ while(!wanteventflag)
 				}
 			if((lifetime % 10) == 0)
 				{
-				if(gpiostatusled > 0)
-					{
-					GPIO_SET = 1 << gpiostatusled;
-					nanosleep(&sleepled, NULL);
-					GPIO_CLR = 1 << gpiostatusled;
-					}
+				if(gpiostatusled > 0) GPIO_SET = 1 << gpiostatusled;
 				if(gpiobutton > 0)
 					{
 					if(GET_GPIO(gpiobutton) > 0)
@@ -3263,6 +3220,10 @@ while(!wanteventflag)
 						}
 					}
 				if(errortxcount > errorcountmax) wanteventflag |= EXIT_ON_ERROR;
+				}
+			else if((lifetime % 10) == 1)
+				{
+				if(gpiostatusled > 0) GPIO_CLR = 1 << gpiostatusled;
 				}
 			if((tottime > 0) && (lifetime >= tottime)) wanteventflag |= EXIT_ON_TOT;
 			if((lifetime % timewatchdog) == 0)
@@ -3285,7 +3246,6 @@ static int epret = 0;
 static struct epoll_event ev, events[EPOLL_EVENTS_MAX];
 static size_t packetcountlast = 0;
 static u64 timer1count;
-static struct timespec sleepled;
 
 if((fd_epoll= epoll_create(1)) < 0) return false;
 ev.data.fd = fd_socket_rx;
@@ -3298,14 +3258,6 @@ ev.events = EPOLLIN;
 if(epoll_ctl(fd_epoll, EPOLL_CTL_ADD, fd_timer1, &ev) < 0) return false;
 epi++;
 
-sleepled.tv_sec = 0;
-sleepled.tv_nsec = GPIO_LED_DELAY;
-if(gpiostatusled > 0)
-	{
-	GPIO_SET = 1 << gpiostatusled;
-	nanosleep(&sleepled, NULL);
-	GPIO_CLR = 1 << gpiostatusled;
-	}
 if(nl_set_frequency() == false) errorcount++;
 while(!wanteventflag)
 	{
@@ -3349,12 +3301,7 @@ while(!wanteventflag)
 				}
 			if((lifetime % 10) == 0)
 				{
-				if(gpiostatusled > 0)
-					{
-					GPIO_SET = 1 << gpiostatusled;
-					nanosleep(&sleepled, NULL);
-					GPIO_CLR = 1 << gpiostatusled;
-					}
+				if(gpiostatusled > 0) GPIO_SET = 1 << gpiostatusled;
 				if(gpiobutton > 0)
 					{
 					if(GET_GPIO(gpiobutton) > 0)
@@ -3364,6 +3311,10 @@ while(!wanteventflag)
 						}
 					}
 				if(errortxcount > errorcountmax) wanteventflag |= EXIT_ON_ERROR;
+				}
+			else if((lifetime % 10) == 1)
+				{
+				if(gpiostatusled > 0) GPIO_CLR = 1 << gpiostatusled;
 				}
 			if((tottime > 0) && (lifetime >= tottime)) wanteventflag |= EXIT_ON_TOT;
 			if((lifetime % timewatchdog) == 0)
@@ -3377,7 +3328,7 @@ while(!wanteventflag)
 return true;
 }
 /*---------------------------------------------------------------------------*/
-static bool nl_scanloop_rcascan()
+static bool nl_scanloop_waterfall(void)
 {
 static ssize_t i;
 static int fd_epoll = 0;
@@ -3386,7 +3337,6 @@ static int epret = 0;
 static struct epoll_event ev, events[EPOLL_EVENTS_MAX];
 static size_t packetcountlast = 0;
 static u64 timer1count;
-static struct timespec sleepled;
 
 if((fd_epoll= epoll_create(1)) < 0) return false;
 ev.data.fd = fd_socket_rx;
@@ -3399,14 +3349,83 @@ ev.events = EPOLLIN;
 if(epoll_ctl(fd_epoll, EPOLL_CTL_ADD, fd_timer1, &ev) < 0) return false;
 epi++;
 
-sleepled.tv_sec = 0;
-sleepled.tv_nsec = GPIO_LED_DELAY;
-if(gpiostatusled > 0)
+if(nl_set_frequency() == false) errorcount++;
+while(!wanteventflag)
 	{
-	GPIO_SET = 1 << gpiostatusled;
-	nanosleep(&sleepled, NULL);
-	GPIO_CLR = 1 << gpiostatusled;
+	if(errorcount > errorcountmax) wanteventflag |= EXIT_ON_ERROR;
+	epret = epoll_pwait(fd_epoll, events, epi, timerwaitnd, NULL);
+	if(epret == -1)
+		{
+		if(errno != EINTR)
+			{
+			#ifdef HCXDEBUG
+			fprintf(fh_debug, "epret failed: %s\n", strerror(errno));
+			#endif
+			errorcount++;
+			}
+		continue;
+		}
+	for(i = 0; i < epret; i++)
+		{
+		if(events[i].data.fd == fd_socket_rx) process_packet();
+		else if(events[i].data.fd == fd_timer1)
+			{
+			if(read(fd_timer1, &timer1count, sizeof(u64)) == -1) errorcount++;
+			lifetime++;
+			if((lifetime % timehold) == 0)
+				{
+				scanlistindex++;
+				if(nl_set_frequency() == false) errorcount++;
+				}
+			if((lifetime % 10) == 0)
+				{
+				if(gpiostatusled > 0) GPIO_SET = 1 << gpiostatusled;
+				if(gpiobutton > 0)
+					{
+					if(GET_GPIO(gpiobutton) > 0)
+						{
+						wanteventflag |= EXIT_ON_GPIOBUTTON;
+						if(gpiostatusled > 0) GPIO_SET = 1 << gpiostatusled;
+						}
+					}
+				if(errortxcount > errorcountmax) wanteventflag |= EXIT_ON_ERROR;
+				}
+			else if((lifetime % 10) == 1)
+				{
+				if(gpiostatusled > 0) GPIO_CLR = 1 << gpiostatusled;
+				}
+			if((tottime > 0) && (lifetime >= tottime)) wanteventflag |= EXIT_ON_TOT;
+			if((lifetime % timewatchdog) == 0)
+				{
+				if(packetcount == packetcountlast) wanteventflag |= EXIT_ON_WATCHDOG;
+				packetcountlast = packetcount;
+				}
+			}
+		}
 	}
+return true;
+}
+/*---------------------------------------------------------------------------*/
+static bool nl_scanloop_rcascan(void)
+{
+static ssize_t i;
+static int fd_epoll = 0;
+static int epi = 0;
+static int epret = 0;
+static struct epoll_event ev, events[EPOLL_EVENTS_MAX];
+static size_t packetcountlast = 0;
+static u64 timer1count;
+
+if((fd_epoll= epoll_create(1)) < 0) return false;
+ev.data.fd = fd_socket_rx;
+ev.events = EPOLLIN;
+if(epoll_ctl(fd_epoll, EPOLL_CTL_ADD, fd_socket_rx, &ev) < 0) return false;
+epi++;
+
+ev.data.fd = fd_timer1;
+ev.events = EPOLLIN;
+if(epoll_ctl(fd_epoll, EPOLL_CTL_ADD, fd_timer1, &ev) < 0) return false;
+epi++;
 
 if(nl_set_frequency() == false) errorcount++;
 while(!wanteventflag)
@@ -3453,12 +3472,7 @@ while(!wanteventflag)
 				}
 			if((lifetime % 10) == 0)
 				{
-				if(gpiostatusled > 0)
-					{
-					GPIO_SET = 1 << gpiostatusled;
-					nanosleep(&sleepled, NULL);
-					GPIO_CLR = 1 << gpiostatusled;
-					}
+				if(gpiostatusled > 0) GPIO_SET = 1 << gpiostatusled;
 				if(gpiobutton > 0)
 					{
 					if(GET_GPIO(gpiobutton) > 0)
@@ -3468,6 +3482,10 @@ while(!wanteventflag)
 						}
 					}
 				if(errortxcount > errorcountmax) wanteventflag |= EXIT_ON_ERROR;
+				}
+			else if((lifetime % 10) == 1)
+				{
+				if(gpiostatusled > 0) GPIO_CLR = 1 << gpiostatusled;
 				}
 			if((tottime > 0) && (lifetime >= tottime)) wanteventflag |= EXIT_ON_TOT;
 			if((lifetime % timewatchdog) == 0)
@@ -3551,146 +3569,6 @@ while(nla_ok(pos, nestremlen))
 	pos = nla_next(pos, &nestremlen);
 	}
 return 0;
-}
-/*---------------------------------------------------------------------------*/
-/*
-Linux Generic Netlink protocol
-    Netlink message header (type: 0x0025)
-    Command: NL80211_CMD_NEW_INTERFACE (7)
-    Family Version: 0
-    Reserved
-Linux 802.11 Netlink
-    Attribute: NL80211_ATTR_WIPHY
-        Len: 8
-        Type: 0x0001, NL80211_ATTR_WIPHY (1)
-        Attribute Value: 0x00000003 (3)
-    Attribute: NL80211_ATTR_IFNAME
-        Len: 12
-        Type: 0x0004, NL80211_ATTR_IFNAME (4)
-        Interface Name: hcxmon0
-    Attribute: NL80211_ATTR_IFTYPE
-        Len: 8
-        Type: 0x0005, NL80211_ATTR_IFTYPE (5)
-        Attribute Type: NL80211_IFTYPE_MONITOR (6)
-*/
-
-static inline bool nl_set_interface(void)
-{
-static size_t ii;
-static ssize_t i;
-static ssize_t msglen;
-static int nlremlen = 0;
-static struct nlmsghdr *nlh;
-static struct genlmsghdr *glh;
-static struct nlattr *nla;
-static struct nlmsgerr *nle;
-static u32 *wiphytmp;
-static u64 *wdevtmp;
-static u32 *ifidxtmp;
-static u8 *vimactmp;
-static char *ifnametmp;
-
-i = 0;
-nlh = (struct nlmsghdr*)nltxbuffer;
-nlh->nlmsg_type = nlfamily;
-nlh->nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK;
-nlh->nlmsg_seq = nlseqcounter++;
-nlh->nlmsg_pid = hcxpid;
-i += sizeof(struct nlmsghdr);
-glh = (struct genlmsghdr*)(nltxbuffer + i);
-glh->cmd = NL80211_CMD_NEW_INTERFACE;
-glh->version = 1;
-glh->reserved = 0;
-i += sizeof(struct genlmsghdr);
-nla = (struct nlattr*)(nltxbuffer + i);
-nla->nla_len = 8;
-
-nla->nla_type = NL80211_ATTR_WIPHY;
-//*(u32*)nla_data(nla) = phyindex;
-i += 8;
-nla = (struct nlattr*)(nltxbuffer + i);
-nla->nla_len = 8;
-
-nla->nla_type = NL80211_ATTR_IFNAME;
-//memcpy(nla_data(nla), hcxname, hcxnamelen);
-i += 8;
-nla = (struct nlattr*)(nltxbuffer + i);
-nla->nla_len = 8;
-
-
-nla->nla_type = NL80211_ATTR_IFTYPE;
-*(u32*)nla_data(nla) = NL80211_IFTYPE_MONITOR;
-i += 8;
-if(((ifakttype & IFTYPEMONACT) == IFTYPEMONACT) && (activemonitorflag == true))
-	{
-	nla = (struct nlattr*)(nltxbuffer + i);
-	nla->nla_len = 8;
-	nla->nla_type = NL80211_ATTR_MNTR_FLAGS;
-	nla = (struct nlattr*)nla_data(nla);
-	nla->nla_len = 4;
-	nla->nla_type = NL80211_MNTR_FLAG_ACTIVE;
-	i += 8;
-	}
-nlh->nlmsg_len = i;
-if((write(fd_socket_nl, nltxbuffer, i)) != i) return false;
-
-while(1)
-	{
-	msglen = read(fd_socket_nl, &nlrxbuffer, NLRX_SIZE);
-	if(msglen == -1) break;
-	if(msglen == 0) break;
-	wiphytmp = NULL;
-	wdevtmp = NULL;
-	ifidxtmp = NULL;;
-	vimactmp = NULL;;
-	ifnametmp = NULL;
-	for(nlh = (struct nlmsghdr*)nlrxbuffer; NLMSG_OK(nlh, (u32)msglen); nlh = NLMSG_NEXT(nlh, msglen))
-		{
-		if(nlh->nlmsg_type == NLMSG_DONE) return true;
-		if(nlh->nlmsg_type == NLMSG_ERROR)
-			{
-			nle = (struct nlmsgerr*)(nlrxbuffer + sizeof(struct nlmsghdr));
-			if(nle->error == 0) return true;
-			errorcount++;
-			nlfamily = 0;
-			return false;
-			}
-		glh = (struct genlmsghdr*)NLMSG_DATA(nlh);
-		if(glh->cmd != NL80211_CMD_NEW_INTERFACE) continue;
-		nla = (struct nlattr*)((unsigned char*)NLMSG_DATA(nlh) + sizeof(struct genlmsghdr));
-		nlremlen = NLMSG_PAYLOAD(nlh, 0) -4;
-		while(nla_ok(nla, nlremlen))
-			{
-			if(nla->nla_type == NL80211_ATTR_WDEV) wdevtmp = nla_data(nla);
-			if(nla->nla_type == NL80211_ATTR_IFINDEX) ifidxtmp = nla_data(nla);
-			if(nla->nla_type == NL80211_ATTR_IFNAME) ifnametmp = nla_data(nla);
-			if(nla->nla_type == NL80211_ATTR_WIPHY) wiphytmp = nla_data(nla);
-			if(nla->nla_type == NL80211_ATTR_MAC)
-				{
-				if(nla->nla_len == 10) vimactmp = nla_data(nla);
-				}
-			nla = nla_next(nla, &nlremlen);
-			}
-		for(ii = 0; ii < ifpresentlistcounter; ii++)
-			{
-			if((ifpresentlist + ii)->wiphy == *(int*)wiphytmp)
-				{
-				if(ifidxtmp != NULL) (ifpresentlist + ii)->index = *(u32*)ifidxtmp;
-				if(wdevtmp != NULL)
-					{
-					if((ifpresentlist + ii)->wdev != 0)
-						{
-						if((ifpresentlist + ii)->wdev != *(u64*)wdevtmp) (ifpresentlist + ii)->type |= IF_IS_SHARED;
-						}
-					(ifpresentlist + ii)->wdev = *(u64*)wdevtmp;
-					}
-				if(vimactmp != NULL)memcpy((ifpresentlist + ii)->vimac, vimactmp, ETH_ALEN);
-				if(ifnametmp != NULL)strncpy((ifpresentlist + ii)->name, ifnametmp, IF_NAMESIZE);
-				}
-			}
-		}
-	}
-return false;
 }
 /*---------------------------------------------------------------------------*/
 static bool nl_get_interfacelist(void)
@@ -5417,6 +5295,8 @@ fprintf(stdout, "--ftc            : enable fake time clock\n"
 	"                     1 = show APs on current channel, show CLIENTs (M1M2ROGUE)\n"
 	"                     2 = show all APs (M1M2, M1M2M3 or PMKID), show CLIENTs (M1M2ROGUE)\n"
 	"                     3 = show all APs, show CLIENTs (M1M2ROGUE)\n"
+	"                     4 = show waterfall (PMKID & EAPOL)\n"
+	"                          TIME TYPE MAC_AP MAC_CLIENT ESSID\n"
 	"                     columns:\n"
 	"                      E = encryption (e)ncrypted / (o)pen\n"
 	"                      A = AKM (p)re-shared key\n"
@@ -5616,6 +5496,11 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 
 		case HCX_PCAPNGNAME:
 		pcapngoutname = optarg;
+		if(rcascanmode  != 0)
+			{
+			fprintf(stderr, "combination of --rcascan and -w is not allowed\n");
+			exit(EXIT_FAILURE);
+			}
 		break;
 
 		case HCX_SET_SCANLIST_FROM_INTERFACE:
@@ -5803,6 +5688,12 @@ while((auswahl = getopt_long(argc, argv, short_options, long_options, &index)) !
 			fprintf(stderr, "only (a)ctive or (p)assive is allowed\n");
 			exit(EXIT_FAILURE);
 			}
+		if(pcapngoutname != NULL)
+			{
+			fprintf(stderr, "combination of --rcascan and -w is not allowed\n");
+			exit(EXIT_FAILURE);
+			}
+
 		break;
 
 		case HCX_HELP:
@@ -6003,6 +5894,14 @@ else if(rds == 0)
 		fprintf(stderr, "failed to initialize main scan loop\n");
 		}
 	}
+else if(rds == 4)
+	{
+	if(nl_scanloop_waterfall() == false)
+		{
+		errorcount++;
+		fprintf(stderr, "failed to initialize main scan loop\n");
+		}
+	}
 else
 	{
 	if(nl_scanloop_rds() == false)
@@ -6027,10 +5926,15 @@ close_lists();
 if(rooterrorflag == true) exit(EXIT_FAILURE);
 if((monitormodeflag == true) || (interfacelistflag == true) || (interfaceinfoflag == true) || (interfacelistshortflag == true)) return EXIT_SUCCESS;
 fprintf(stdout, "\n\033[?25h");
-if(errorcount > 0) fprintf(stderr, "%u ERROR(s) during runtime (mostly caused by a broken driver)\n", errorcount);
-if(errortxcount > 0) fprintf(stderr, "%u TX ERROR(s) during runtime (mostly caused by a broken driver)\n", errortxcount);
 fprintf(stdout, "%u Packet(s) captured by kernel\n", lStats.tp_packets);
 fprintf(stdout, "%u Packet(s) dropped by kernel\n", lStats.tp_drops);
+if(errorcount > 0) fprintf(stderr, "%u ERROR(s) during runtime (mostly caused by a broken driver)\n", errorcount);
+if(errortxcount > 0) fprintf(stderr, "%u TX ERROR(s) during runtime (mostly caused by a broken driver)\n", errortxcount);
+if(rcascanmode == RCASCAN_ACTIVE)
+	{
+	if(beaconrcascancount == 0) fprintf(stderr, "0 BEACONs received (monitor mode is possibly not working)\n");
+	if(proberesponsercascancount == 0) fprintf(stderr, "0 PROBERESPONSEs received (packet injection is possibly notworking)\n");
+	}
 if((uid == 0) && (ftcflag == true)) save_ftc();
 if(exiteapolflag != 0)
 	{
